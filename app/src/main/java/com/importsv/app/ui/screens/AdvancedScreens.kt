@@ -13,14 +13,44 @@ import androidx.compose.ui.unit.dp
 import com.importsv.app.auth.LocalUser
 import com.importsv.app.data.DemoStore
 import com.importsv.app.model.EstadoPedido
-import com.importsv.app.validation.FormValidator
 import java.util.Locale
+
+// ===========================================
+// UTILIDADES
+// ===========================================
 
 private fun dinero(valor: Double): String {
     return String.format(Locale.US, "$%.2f", valor)
 }
 
-// Diseño general
+private fun validarEnlace(enlace: String): String? {
+    val valor = enlace.trim()
+
+    if (valor.isEmpty()) {
+        return "El enlace del producto es obligatorio."
+    }
+
+    val uri = try {
+        java.net.URI(valor)
+    } catch (e: Exception) {
+        return "Ingresa un enlace válido."
+    }
+
+    if (
+        uri.scheme !in listOf("https", "http") ||
+        uri.host.isNullOrBlank() ||
+        !uri.host.contains(".")
+    ) {
+        return "Ingresa un enlace válido que comience con https://"
+    }
+
+    return null
+}
+
+// ===========================================
+// DISEÑO GENERAL
+// ===========================================
+
 @Composable
 private fun Pantalla(
     titulo: String,
@@ -33,20 +63,20 @@ private fun Pantalla(
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
-        Spacer(Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
-            titulo,
+            text = titulo,
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         contenido()
 
         if (onVolver != null) {
-            Spacer(Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             OutlinedButton(
                 onClick = onVolver,
@@ -55,10 +85,15 @@ private fun Pantalla(
                 Text("Volver")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
-// Tarjetas reutilizables del menú
+// ===========================================
+// TARJETA REUTILIZABLE
+// ===========================================
+
 @Composable
 private fun Opcion(
     titulo: String,
@@ -72,22 +107,50 @@ private fun Opcion(
             .padding(vertical = 5.dp)
     ) {
         Column(
-            Modifier.padding(16.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
             Text(
-                titulo,
+                text = titulo,
                 style = MaterialTheme.typography.titleMedium
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                descripcion,
+                text = descripcion,
                 style = MaterialTheme.typography.bodyMedium
             )
         }
     }
 }
 
+// ===========================================
+// MENSAJES
+// ===========================================
+
+@Composable
+private fun Mensaje(
+    texto: String,
+    error: Boolean = false
+) {
+    if (texto.isNotBlank()) {
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = texto,
+            color = if (error) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.primary
+            }
+        )
+    }
+}
+
+// ===========================================
 // PANEL DEL CLIENTE
+// ===========================================
+
 @Composable
 fun ClientePanel(
     usuario: LocalUser,
@@ -99,47 +162,56 @@ fun ClientePanel(
 ) {
     Pantalla("ImportSV · Cliente") {
 
-        Text("Bienvenido, ${usuario.nombre}")
+        Text(
+            text = "Bienvenido, ${usuario.nombre}",
+            style = MaterialTheme.typography.titleLarge
+        )
 
         Text(
-            usuario.correo,
-            style = MaterialTheme.typography.bodySmall
+            text = usuario.correo,
+            style = MaterialTheme.typography.bodyMedium
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Mis operaciones",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Opcion(
-            "Nueva solicitud",
-            "Solicitar la importación de un producto",
-            onNueva
+            titulo = "Nueva solicitud",
+            descripcion = "Solicitar la importación de un producto",
+            onClick = onNueva
         )
 
         Opcion(
-            "Mis solicitudes y cotizaciones",
-            "Revisar solicitudes, ver y aceptar cotizaciones",
-            onMisSolicitudes
+            titulo = "Mis solicitudes y cotizaciones",
+            descripcion = "Consultar solicitudes y aceptar cotizaciones",
+            onClick = onMisSolicitudes
         )
 
         Opcion(
-            "Mis pedidos",
-            "Consultar estado e historial",
-            onPedidos
+            titulo = "Mis pedidos",
+            descripcion = "Consultar pedidos, estados e historial",
+            onClick = onPedidos
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         HorizontalDivider()
 
-        Text(
-            "Opciones de demostración",
-            style = MaterialTheme.typography.titleSmall
-        )
+        Spacer(modifier = Modifier.height(12.dp))
 
         Opcion(
-            "Entrar al panel administrativo",
-            "Acceso académico sin control real de permisos",
-            onAdmin
+            titulo = "Panel de administración",
+            descripcion = "Gestionar solicitudes, cotizaciones, pedidos y reportes",
+            onClick = onAdmin
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedButton(
             onClick = onSalir,
@@ -150,7 +222,10 @@ fun ClientePanel(
     }
 }
 
-// NUEVA SOLICITUD
+// ===========================================
+// REGISTRAR NUEVA SOLICITUD
+// ===========================================
+
 @Composable
 fun NuevaSolicitudPanel(
     usuario: LocalUser,
@@ -161,91 +236,136 @@ fun NuevaSolicitudPanel(
     var categoria by remember { mutableStateOf("") }
     var cantidad by remember { mutableStateOf("") }
     var notas by remember { mutableStateOf("") }
-    var mensaje by remember { mutableStateOf("") }
 
-    Pantalla("Nueva solicitud", onVolver) {
+    var mensaje by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+
+    Pantalla(
+        titulo = "Nueva solicitud",
+        onVolver = onVolver
+    ) {
+        Text(
+            "Completa los datos del producto que deseas importar."
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
             value = enlace,
-            onValueChange = { enlace = it },
+            onValueChange = {
+                enlace = it
+                mensaje = ""
+            },
             label = { Text("Enlace del producto") },
             modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Uri
             )
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
         OutlinedTextField(
             value = producto,
-            onValueChange = { producto = it },
+            onValueChange = {
+                producto = it
+                mensaje = ""
+            },
             label = { Text("Nombre del producto") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
             value = categoria,
-            onValueChange = { categoria = it },
+            onValueChange = {
+                categoria = it
+                mensaje = ""
+            },
             label = { Text("Categoría") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         OutlinedTextField(
             value = cantidad,
-            onValueChange = { cantidad = it },
+            onValueChange = {
+                cantidad = it
+                mensaje = ""
+            },
             label = { Text("Cantidad") },
             modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number
             )
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
         OutlinedTextField(
             value = notas,
-            onValueChange = { notas = it },
+            onValueChange = {
+                notas = it
+            },
             label = { Text("Observaciones (opcional)") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Button(
             onClick = {
                 val cantidadNumero = cantidad.toIntOrNull()
+                val errorEnlace = validarEnlace(enlace)
 
-                mensaje = when {
-
-                    FormValidator.enlace(enlace) != null ->
-                        FormValidator.enlace(enlace)!!
+                val resultado = when {
+                    errorEnlace != null -> errorEnlace
 
                     producto.isBlank() ->
-                        "El nombre del producto es obligatorio"
+                        "El nombre del producto es obligatorio."
 
                     categoria.isBlank() ->
-                        "La categoría es obligatoria"
+                        "La categoría es obligatoria."
 
                     cantidadNumero == null || cantidadNumero <= 0 ->
-                        "La cantidad debe ser mayor que cero"
+                        "La cantidad debe ser un número mayor que cero."
 
-                    DemoStore.crearSolicitud(
-                        usuario,
-                        enlace,
-                        producto,
-                        categoria,
-                        cantidadNumero,
-                        notas
-                    ) -> {
+                    else -> null
+                }
+
+                if (resultado != null) {
+                    mensaje = resultado
+                    error = true
+                } else {
+                    val guardado = DemoStore.crearSolicitud(
+                        usuario = usuario,
+                        enlace = enlace.trim(),
+                        nombre = producto.trim(),
+                        categoria = categoria.trim(),
+                        cantidad = cantidadNumero!!,
+                        notas = notas.trim()
+                    )
+
+                    if (guardado) {
+                        mensaje = "Solicitud registrada correctamente."
+                        error = false
+
                         enlace = ""
                         producto = ""
                         categoria = ""
                         cantidad = ""
                         notas = ""
-
-                        "Solicitud registrada correctamente"
+                    } else {
+                        mensaje = "No fue posible registrar la solicitud."
+                        error = true
                     }
-
-                    else ->
-                        "No fue posible registrar la solicitud"
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -253,11 +373,14 @@ fun NuevaSolicitudPanel(
             Text("Registrar solicitud")
         }
 
-        Text(mensaje)
+        Mensaje(mensaje, error)
     }
 }
 
+// ===========================================
 // MIS SOLICITUDES Y COTIZACIONES
+// ===========================================
+
 @Composable
 fun MisSolicitudesPanel(
     usuario: LocalUser,
@@ -265,104 +388,112 @@ fun MisSolicitudesPanel(
 ) {
     val solicitudes = DemoStore.misSolicitudes(usuario.id)
 
-    Pantalla("Mis solicitudes", onVolver) {
-
+    Pantalla(
+        titulo = "Mis solicitudes",
+        onVolver = onVolver
+    ) {
         if (solicitudes.isEmpty()) {
-            Text("Todavía no tienes solicitudes")
+            Text("Todavía no tienes solicitudes registradas.")
         }
 
         solicitudes.forEach { solicitud ->
 
-            val cotizacion = DemoStore.cotizacionPara(
-                solicitud.id
-            )
+            key(solicitud.id) {
+                val cotizacion = DemoStore.cotizacionPara(
+                    solicitud.id
+                )
 
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 5.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
+                var mensaje by remember {
+                    mutableStateOf("")
+                }
 
-                    Text(
-                        "#${solicitud.id} · ${solicitud.nombreProducto}",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Categoría: ${solicitud.categoria}"
-                    )
-
-                    Text(
-                        "Cantidad: ${solicitud.cantidad}"
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    if (cotizacion == null) {
-
-                        Text("Pendiente de cotización")
-
-                    } else {
-
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
-                            "Cotización #${cotizacion.id}: " +
-                                    dinero(cotizacion.calcularTotal())
+                            text = "Solicitud #${solicitud.id}",
+                            style = MaterialTheme.typography.titleMedium
                         )
 
                         Text(
-                            "Producto: " +
-                                    dinero(cotizacion.precioProducto)
+                            text = solicitud.nombreProducto
                         )
 
-                        Text(
-                            "Envío: " +
-                                    dinero(cotizacion.envioInternacional)
-                        )
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        Text(
-                            "Importación: " +
-                                    dinero(cotizacion.cargosImportacion)
-                        )
+                        Text("Categoría: ${solicitud.categoria}")
+                        Text("Cantidad: ${solicitud.cantidad}")
+                        Text("Enlace: ${solicitud.enlaceProducto}")
 
-                        Text(
-                            "Comisión: " +
-                                    dinero(cotizacion.comision)
-                        )
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        Text(
-                            "Entrega local: " +
-                                    dinero(cotizacion.entregaLocal)
-                        )
+                        HorizontalDivider()
 
-                        var mensaje by remember(solicitud.id) {
-                            mutableStateOf("")
-                        }
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        Spacer(Modifier.height(10.dp))
-
-                        if (cotizacion.aceptada) {
-
-                            Text("Cotización aceptada")
-
+                        if (cotizacion == null) {
+                            Text(
+                                "Estado: Pendiente de cotización"
+                            )
                         } else {
+                            Text(
+                                text = "Cotización #${cotizacion.id}",
+                                style = MaterialTheme.typography.titleMedium
+                            )
 
-                            Button(
-                                onClick = {
-                                    mensaje = DemoStore.aceptarCotizacion(
-                                        cotizacion.id,
-                                        usuario.id
-                                    )
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                "Producto: ${dinero(cotizacion.precioProducto)}"
+                            )
+
+                            Text(
+                                "Envío internacional: ${dinero(cotizacion.envioInternacional)}"
+                            )
+
+                            Text(
+                                "Importación: ${dinero(cotizacion.cargosImportacion)}"
+                            )
+
+                            Text(
+                                "Comisión: ${dinero(cotizacion.comision)}"
+                            )
+
+                            Text(
+                                "Entrega local: ${dinero(cotizacion.entregaLocal)}"
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "Total: ${dinero(cotizacion.calcularTotal())}",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            if (cotizacion.aceptada) {
+                                Text("Cotización aceptada.")
+                            } else {
+                                Button(
+                                    onClick = {
+                                        mensaje = DemoStore.aceptarCotizacion(
+                                            cotizacion.id,
+                                            usuario.id
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Aceptar cotización")
                                 }
-                            ) {
-                                Text(
-                                    "Aceptar cotización y generar pedido"
-                                )
                             }
-                        }
 
-                        if (mensaje.isNotEmpty()) {
-                            Text(mensaje)
+                            Mensaje(mensaje)
                         }
                     }
                 }
@@ -371,7 +502,10 @@ fun MisSolicitudesPanel(
     }
 }
 
+// ===========================================
 // MIS PEDIDOS
+// ===========================================
+
 @Composable
 fun MisPedidosPanel(
     usuario: LocalUser,
@@ -379,50 +513,64 @@ fun MisPedidosPanel(
 ) {
     val pedidos = DemoStore.misPedidos(usuario.id)
 
-    Pantalla("Mis pedidos", onVolver) {
-
+    Pantalla(
+        titulo = "Mis pedidos",
+        onVolver = onVolver
+    ) {
         if (pedidos.isEmpty()) {
-            Text("Todavía no tienes pedidos aprobados")
+            Text("Todavía no tienes pedidos registrados.")
         }
 
         pedidos.forEach { pedido ->
+            key(pedido.id) {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Pedido #${pedido.id}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 5.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
+                        Text(
+                            pedido.solicitud.nombreProducto
+                        )
 
-                    Text(
-                        "Pedido #${pedido.id} · " +
-                                pedido.solicitud.nombreProducto,
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        "Estado: " +
-                                pedido.estado.name.replace('_', ' ')
-                    )
+                        Text(
+                            "Estado actual: ${pedido.estado.name.replace('_', ' ')}"
+                        )
 
-                    Text(
-                        "Total: " +
-                                dinero(pedido.cotizacion.calcularTotal())
-                    )
+                        Text(
+                            "Total: ${dinero(pedido.cotizacion.calcularTotal())}"
+                        )
 
-                    Text(
-                        "Historial: " +
-                                pedido.historialEstados.joinToString(" → ") {
-                                    it.name.replace('_', ' ')
-                                }
-                    )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            "Historial de estados",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+
+                        pedido.historialEstados.forEach { registro ->
+                            Text("• $registro")
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+// ===========================================
 // PANEL ADMINISTRATIVO
+// ===========================================
+
 @Composable
 fun AdminPanel(
     onSolicitudes: () -> Unit,
@@ -431,155 +579,189 @@ fun AdminPanel(
     onClientes: () -> Unit,
     onVolver: () -> Unit
 ) {
-    Pantalla("Administración", onVolver) {
-
-        Text(
-            "Modo académico sin permisos reales. " +
-                    "No utilizar con información privada."
-        )
-
-        Spacer(Modifier.height(12.dp))
-
+    Pantalla(
+        titulo = "Panel de administración",
+        onVolver = onVolver
+    ) {
         Opcion(
-            "Solicitudes y cotizaciones",
-            "Crear cotizaciones para solicitudes de clientes",
-            onSolicitudes
+            titulo = "Solicitudes y cotizaciones",
+            descripcion = "Consultar solicitudes y generar cotizaciones",
+            onClick = onSolicitudes
         )
 
         Opcion(
-            "Gestión de pedidos",
-            "Avanzar pedidos siguiendo estados válidos",
-            onPedidos
+            titulo = "Gestión de pedidos",
+            descripcion = "Actualizar estados y consultar historial",
+            onClick = onPedidos
         )
 
         Opcion(
-            "Clientes",
-            "Consultar los clientes con solicitudes registradas",
-            onClientes
+            titulo = "Clientes",
+            descripcion = "Consultar clientes registrados en las solicitudes",
+            onClick = onClientes
         )
 
         Opcion(
-            "Reportes",
-            "Visualizar estadísticas de las operaciones",
-            onReportes
+            titulo = "Reportes",
+            descripcion = "Consultar estadísticas de las operaciones",
+            onClick = onReportes
         )
     }
 }
 
+// ===========================================
 // GESTIÓN DE COTIZACIONES
+// ===========================================
+
 @Composable
 fun GestionCotizacionesPanel(
     onVolver: () -> Unit
 ) {
     val solicitudes = DemoStore.solicitudes()
 
-    Pantalla("Gestionar cotizaciones", onVolver) {
-
+    Pantalla(
+        titulo = "Gestionar cotizaciones",
+        onVolver = onVolver
+    ) {
         if (solicitudes.isEmpty()) {
-            Text(
-                "No hay solicitudes. Registra una " +
-                        "desde el panel del cliente."
-            )
+            Text("No hay solicitudes pendientes o registradas.")
         }
 
         solicitudes.forEach { solicitud ->
+            key(solicitud.id) {
+                val cotizacion = DemoStore.cotizacionPara(
+                    solicitud.id
+                )
 
-            val creada = DemoStore.cotizacionPara(
-                solicitud.id
-            )
+                var precio by remember { mutableStateOf("") }
+                var envio by remember { mutableStateOf("") }
+                var importacion by remember { mutableStateOf("") }
+                var comision by remember { mutableStateOf("") }
+                var entrega by remember { mutableStateOf("") }
 
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
+                var mensaje by remember { mutableStateOf("") }
 
-                    Text(
-                        "Solicitud #${solicitud.id}: " +
-                                solicitud.nombreProducto,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Cliente: ${solicitud.cliente.nombre}"
-                    )
-
-                    Text(
-                        "Cantidad: ${solicitud.cantidad}"
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    if (creada != null) {
-
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
                         Text(
-                            "Cotización creada: " +
-                                    dinero(creada.calcularTotal())
+                            "Solicitud #${solicitud.id}",
+                            style = MaterialTheme.typography.titleMedium
                         )
 
-                    } else {
+                        Text(solicitud.nombreProducto)
+                        Text("Cliente: ${solicitud.cliente.nombre}")
+                        Text("Cantidad: ${solicitud.cantidad}")
 
-                        val nombres = listOf(
-                            "Precio del producto",
-                            "Envío internacional",
-                            "Cargos de importación",
-                            "Comisión",
-                            "Entrega local"
-                        )
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        val campos = remember(solicitud.id) {
-                            mutableStateListOf(
-                                "", "", "", "", ""
+                        if (cotizacion != null) {
+                            Text(
+                                "Cotización creada",
+                                style = MaterialTheme.typography.titleMedium
                             )
-                        }
 
-                        var mensaje by remember(solicitud.id) {
-                            mutableStateOf("")
-                        }
+                            Text(
+                                "Total: ${dinero(cotizacion.calcularTotal())}"
+                            )
 
-                        nombres.forEachIndexed { i, nombre ->
-
+                            Text(
+                                if (cotizacion.aceptada) {
+                                    "Estado: Aceptada"
+                                } else {
+                                    "Estado: Pendiente de aceptación"
+                                }
+                            )
+                        } else {
                             OutlinedTextField(
-                                value = campos[i],
-                                onValueChange = {
-                                    campos[i] = it
-                                },
-                                label = {
-                                    Text(nombre)
-                                },
+                                value = precio,
+                                onValueChange = { precio = it },
+                                label = { Text("Precio del producto") },
+                                modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Decimal
-                                ),
-                                modifier = Modifier.fillMaxWidth()
+                                )
                             )
-                        }
 
-                        Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = envio,
+                                onValueChange = { envio = it },
+                                label = { Text("Envío internacional") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                )
+                            )
 
-                        Button(
-                            onClick = {
-                                val valores = campos.map {
-                                    it.toDoubleOrNull()
-                                }
+                            OutlinedTextField(
+                                value = importacion,
+                                onValueChange = { importacion = it },
+                                label = { Text("Cargos de importación") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                )
+                            )
 
-                                mensaje = if (
-                                    valores.any { it == null }
-                                ) {
-                                    "Ingresa cinco importes numéricos"
-                                } else {
-                                    DemoStore.crearCotizacion(
-                                        solicitud.id,
-                                        valores.filterNotNull()
+                            OutlinedTextField(
+                                value = comision,
+                                onValueChange = { comision = it },
+                                label = { Text("Comisión") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                )
+                            )
+
+                            OutlinedTextField(
+                                value = entrega,
+                                onValueChange = { entrega = it },
+                                label = { Text("Entrega local") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Button(
+                                onClick = {
+                                    val valores = listOf(
+                                        precio.toDoubleOrNull(),
+                                        envio.toDoubleOrNull(),
+                                        importacion.toDoubleOrNull(),
+                                        comision.toDoubleOrNull(),
+                                        entrega.toDoubleOrNull()
                                     )
-                                }
-                            }
-                        ) {
-                            Text("Generar cotización")
-                        }
 
-                        if (mensaje.isNotEmpty()) {
-                            Text(mensaje)
+                                    if (valores.any { it == null }) {
+                                        mensaje = "Completa todos los importes con números válidos."
+                                    } else if (
+                                        valores.any {
+                                            it != null &&
+                                                    (!it.isFinite() || it < 0.0)
+                                        }
+                                    ) {
+                                        mensaje = "Los importes no pueden ser negativos."
+                                    } else {
+                                        mensaje = DemoStore.crearCotizacion(
+                                            solicitud.id,
+                                            valores.filterNotNull()
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Generar cotización")
+                            }
+
+                            Mensaje(mensaje)
                         }
                     }
                 }
@@ -588,72 +770,81 @@ fun GestionCotizacionesPanel(
     }
 }
 
+// ===========================================
 // GESTIÓN DE PEDIDOS
+// ===========================================
+
 @Composable
 fun GestionPedidosPanel(
     onVolver: () -> Unit
 ) {
     val pedidos = DemoStore.pedidos()
 
-    Pantalla("Administrar pedidos", onVolver) {
-
+    Pantalla(
+        titulo = "Administrar pedidos",
+        onVolver = onVolver
+    ) {
         if (pedidos.isEmpty()) {
-            Text(
-                "No hay pedidos. El cliente debe aceptar " +
-                        "primero una cotización."
-            )
+            Text("No existen pedidos registrados.")
         }
 
         pedidos.forEach { pedido ->
+            key(pedido.id) {
+                var mensaje by remember {
+                    mutableStateOf("")
+                }
 
-            var mensaje by remember(pedido.id) {
-                mutableStateOf("")
-            }
-
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
-
-                    Text(
-                        "Pedido #${pedido.id}: " +
-                                pedido.solicitud.nombreProducto,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Text(
-                        "Cliente: ${pedido.solicitud.cliente.nombre}"
-                    )
-
-                    Text(
-                        "Estado: " +
-                                pedido.estado.name.replace('_', ' ')
-                    )
-
-                    Text(
-                        "Historial: " +
-                                pedido.historialEstados.joinToString(" → ") {
-                                    it.name.replace('_', ' ')
-                                }
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Button(
-                        enabled = pedido.estado != EstadoPedido.ENTREGADO,
-                        onClick = {
-                            mensaje = DemoStore.avanzarPedido(
-                                pedido.id
-                            )
-                        }
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
                     ) {
-                        Text("Avanzar al siguiente estado")
-                    }
+                        Text(
+                            text = "Pedido #${pedido.id}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
-                    if (mensaje.isNotBlank()) {
-                        Text(mensaje)
+                        Text(pedido.solicitud.nombreProducto)
+
+                        Text(
+                            "Cliente: ${pedido.solicitud.cliente.nombre}"
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            "Estado actual: ${pedido.estado.name.replace('_', ' ')}"
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            "Historial",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+
+                        pedido.historialEstados.forEach { registro ->
+                            Text("• $registro")
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            enabled = pedido.estado != EstadoPedido.ENTREGADO,
+                            onClick = {
+                                mensaje = DemoStore.avanzarPedido(
+                                    pedido.id
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Avanzar al siguiente estado")
+                        }
+
+                        Mensaje(mensaje)
                     }
                 }
             }
@@ -661,46 +852,59 @@ fun GestionPedidosPanel(
     }
 }
 
-// LISTADO DE CLIENTES
+// ===========================================
+// CLIENTES
+// ===========================================
+
 @Composable
 fun ClientesPanel(
     onVolver: () -> Unit
 ) {
     val clientes = DemoStore.clientes()
 
-    Pantalla("Clientes", onVolver) {
-
+    Pantalla(
+        titulo = "Clientes",
+        onVolver = onVolver
+    ) {
         if (clientes.isEmpty()) {
-            Text("Aún no hay clientes con solicitudes")
+            Text("No existen clientes con solicitudes registradas.")
         }
 
         clientes.forEach { cliente ->
+            key(cliente.id) {
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 5.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            cliente.nombre,
+                            style = MaterialTheme.typography.titleMedium
+                        )
 
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Column(Modifier.padding(16.dp)) {
+                        Text(cliente.correo)
 
-                    Text(
-                        cliente.nombre,
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(cliente.correo)
-
-                    Text(
-                        "Solicitudes: " +
+                        Text(
+                            "Solicitudes: ${
                                 DemoStore.misSolicitudes(cliente.id).size
-                    )
+                            }"
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// REPORTES Y ESTADÍSTICAS
+// ===========================================
+// REPORTES
+// ===========================================
+
 @Composable
 fun ReportesPanel(
     onVolver: () -> Unit
@@ -708,84 +912,101 @@ fun ReportesPanel(
     val solicitudes = DemoStore.solicitudes()
     val cotizaciones = DemoStore.cotizaciones()
     val pedidos = DemoStore.pedidos()
+    val clientes = DemoStore.clientes()
 
-    Pantalla("Reportes del avance", onVolver) {
-
+    Pantalla(
+        titulo = "Reportes",
+        onVolver = onVolver
+    ) {
         Text(
-            "Datos de demostración en memoria"
+            "Resumen de operaciones",
+            style = MaterialTheme.typography.titleLarge
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text("Clientes: ${clientes.size}")
+        Text("Solicitudes: ${solicitudes.size}")
+        Text("Cotizaciones: ${cotizaciones.size}")
 
         Text(
-            "Clientes con solicitudes: " +
-                    DemoStore.clientes().size
-        )
-
-        Text(
-            "Solicitudes: ${solicitudes.size}"
-        )
-
-        Text(
-            "Cotizaciones: ${cotizaciones.size}"
-        )
-
-        Text(
-            "Cotizaciones aceptadas: " +
-                    cotizaciones.count { it.aceptada }
+            "Cotizaciones aceptadas: ${
+                cotizaciones.count { it.aceptada }
+            }"
         )
 
         Text(
-            "Pedidos activos: " +
-                    pedidos.count {
-                        it.estado != EstadoPedido.ENTREGADO
+            "Pedidos activos: ${
+                pedidos.count {
+                    it.estado != EstadoPedido.ENTREGADO
+                }
+            }"
+        )
+
+        Text(
+            "Pedidos entregados: ${
+                pedidos.count {
+                    it.estado == EstadoPedido.ENTREGADO
+                }
+            }"
+        )
+
+        Text(
+            "Total cotizado: ${
+                dinero(
+                    cotizaciones.sumOf {
+                        it.calcularTotal()
                     }
+                )
+            }"
         )
 
-        Text(
-            "Pedidos entregados: " +
-                    pedidos.count {
-                        it.estado == EstadoPedido.ENTREGADO
-                    }
-        )
+        Spacer(modifier = Modifier.height(20.dp))
 
-        Text(
-            "Total cotizado: " +
-                    dinero(
-                        cotizaciones.sumOf {
-                            it.calcularTotal()
-                        }
-                    )
-        )
+        HorizontalDivider()
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             "Solicitudes por categoría",
             style = MaterialTheme.typography.titleMedium
         )
 
-        solicitudes
-            .groupingBy { it.categoria }
-            .eachCount()
-            .forEach { (categoria, total) ->
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (solicitudes.isEmpty()) {
+            Text("No hay información disponible.")
+        } else {
+            val categorias = solicitudes
+                .groupingBy { it.categoria }
+                .eachCount()
+
+            categorias.forEach { (categoria, total) ->
                 Text("$categoria: $total")
             }
+        }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             "Pedidos por estado",
             style = MaterialTheme.typography.titleMedium
         )
 
-        pedidos
-            .groupingBy { it.estado }
-            .eachCount()
-            .forEach { (estado, total) ->
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (pedidos.isEmpty()) {
+            Text("No hay pedidos registrados.")
+        } else {
+            val estados = pedidos
+                .groupingBy { it.estado }
+                .eachCount()
+
+            estados.forEach { (estado, total) ->
                 Text(
                     "${estado.name.replace('_', ' ')}: $total"
                 )
             }
+        }
     }
 }
