@@ -1,0 +1,46 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+
+# Archivos generados
+.gradle/
+build/
+**/build/
+out/
+*.apk
+*.aab
+
+# Android Studio
+.idea/
+*.iml
+local.properties
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Credenciales y archivos privados
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+**/google-services.json
+.env
+.env.*
+
