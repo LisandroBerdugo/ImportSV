@@ -2,168 +2,411 @@
 package com.importsv.app.navigation
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
-import com.importsv.app.auth.LocalAuthRepository
-import com.importsv.app.ui.screens.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+
+import com.importsv.app.firebase.FirebaseRepository
+import com.importsv.app.firebase.PerfilFb
+
+import com.importsv.app.ui.screens.FirebaseLoginScreen
+import com.importsv.app.ui.screens.FirebaseRegisterScreen
+import com.importsv.app.ui.screens.FirebasePanelConPedidos
+import com.importsv.app.ui.screens.FirebaseNuevaSolicitud
+import com.importsv.app.ui.screens.FirebaseListadoSolicitudes
+import com.importsv.app.ui.screens.FirebaseMisCotizaciones
+import com.importsv.app.ui.screens.FirebaseAdminCotizaciones
+import com.importsv.app.ui.screens.FirebaseMisPedidos
+import com.importsv.app.ui.screens.FirebaseAdminPedidos
 
 @Composable
 fun AppNavigation() {
 
-    val context = LocalContext.current
-
-    val auth = remember {
-        LocalAuthRepository(context)
-    }
-
-    var usuario by remember {
-        mutableStateOf(auth.usuarioActual())
-    }
-
     var pantalla by remember {
-        mutableStateOf(
-            if (usuario == null) "login" else "cliente"
-        )
+        mutableStateOf("cargando")
     }
 
-    BackHandler(
-        enabled = pantalla !in listOf("login", "cliente")
-    ) {
-        pantalla = when (pantalla) {
-            "registro" -> "login"
-            "admin" -> "cliente"
-            else -> {
-                if (pantalla.startsWith("admin") ||
-                    pantalla in listOf("reportes", "clientes")
+    var perfil by remember {
+        mutableStateOf<PerfilFb?>(null)
+    }
+
+    var error by remember {
+        mutableStateOf("")
+    }
+
+    var revisionSesion by remember {
+        mutableIntStateOf(0)
+    }
+
+    // =====================================
+    // COMPROBAR SESIÓN FIREBASE
+    // =====================================
+
+    LaunchedEffect(revisionSesion) {
+
+        val usuario = FirebaseRepository.usuarioActual()
+
+        if (usuario == null) {
+
+            perfil = null
+            error = ""
+            pantalla = "login"
+
+        } else {
+
+            pantalla = "cargando"
+            error = ""
+
+            FirebaseRepository.leerPerfil { resultado, mensaje ->
+
+                if (
+                    FirebaseRepository.usuarioActual()?.uid ==
+                    usuario.uid
                 ) {
-                    "admin"
-                } else {
-                    "cliente"
+
+                    if (resultado != null) {
+                        perfil = resultado
+                        pantalla = "home"
+                    } else {
+                        perfil = null
+
+                        error = mensaje
+                            ?: "No fue posible consultar el perfil."
+
+                        pantalla = "error"
+                    }
                 }
             }
         }
     }
 
+    // =====================================
+    // BOTÓN ATRÁS DE ANDROID
+    // =====================================
+
+    BackHandler(
+        enabled = pantalla in listOf(
+            "registro",
+            "nueva",
+            "solicitudes",
+            "cotizaciones",
+            "pedidos",
+            "adminSolicitudes",
+            "adminCotizaciones",
+            "adminPedidos"
+        )
+    ) {
+
+        pantalla = if (pantalla == "registro") {
+            "login"
+        } else {
+            "home"
+        }
+    }
+
+    // =====================================
+    // NAVEGACIÓN
+    // =====================================
+
     when (pantalla) {
 
-        "login" -> LoginScreen(
-            auth = auth,
-            onIngresar = {
-                usuario = auth.usuarioActual()
-                pantalla = "cliente"
-            },
-            onRegistro = {
-                pantalla = "registro"
+        "cargando" -> {
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+
+                CircularProgressIndicator()
+
+                Spacer(Modifier.height(16.dp))
+
+                Text("Verificando sesión...")
             }
-        )
+        }
 
-        "registro" -> RegisterScreen(
-            auth = auth,
-            onRegistrado = {
-                usuario = auth.usuarioActual()
-                pantalla = "cliente"
-            },
-            onVolver = {
-                pantalla = "login"
+        // =================================
+        // LOGIN
+        // =================================
+
+        "login" -> {
+
+            FirebaseLoginScreen(
+                onIngresar = {
+                    revisionSesion++
+                },
+                onRegistro = {
+                    pantalla = "registro"
+                }
+            )
+        }
+
+        // =================================
+        // REGISTRO
+        // =================================
+
+        "registro" -> {
+
+            FirebaseRegisterScreen(
+                onRegistrado = {
+                    revisionSesion++
+                },
+                onVolver = {
+                    pantalla = "login"
+                }
+            )
+        }
+
+        // =================================
+        // PANEL PRINCIPAL
+        // =================================
+
+        "home" -> {
+
+            val usuario = perfil
+
+            if (usuario != null) {
+
+                FirebasePanelConPedidos(
+                    perfil = usuario,
+
+                    onNueva = {
+                        pantalla = "nueva"
+                    },
+
+                    onSolicitudes = {
+                        pantalla = "solicitudes"
+                    },
+
+                    onCotizaciones = {
+                        pantalla = "cotizaciones"
+                    },
+
+                    onPedidos = {
+                        pantalla = "pedidos"
+                    },
+
+                    onAdminSolicitudes = {
+                        if (usuario.rol == "admin") {
+                            pantalla = "adminSolicitudes"
+                        }
+                    },
+
+                    onAdminCotizaciones = {
+                        if (usuario.rol == "admin") {
+                            pantalla = "adminCotizaciones"
+                        }
+                    },
+
+                    onAdminPedidos = {
+                        if (usuario.rol == "admin") {
+                            pantalla = "adminPedidos"
+                        }
+                    },
+
+                    onSalir = {
+                        perfil = null
+                        error = ""
+                        pantalla = "login"
+                    }
+                )
             }
-        )
+        }
 
-        else -> {
-            val actual = usuario
+        // =================================
+        // NUEVA SOLICITUD
+        // =================================
 
-            if (actual == null) {
+        "nueva" -> {
 
+            if (perfil != null) {
+                FirebaseNuevaSolicitud(
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
+            } else {
                 LaunchedEffect(Unit) {
                     pantalla = "login"
                 }
+            }
+        }
+
+        // =================================
+        // MIS SOLICITUDES
+        // =================================
+
+        "solicitudes" -> {
+
+            if (perfil != null) {
+                FirebaseListadoSolicitudes(
+                    esAdmin = false,
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "login"
+                }
+            }
+        }
+
+        // =================================
+        // MIS COTIZACIONES
+        // =================================
+
+        "cotizaciones" -> {
+
+            if (perfil != null) {
+                FirebaseMisCotizaciones(
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "login"
+                }
+            }
+        }
+
+        // =================================
+        // MIS PEDIDOS
+        // =================================
+
+        "pedidos" -> {
+
+            if (perfil != null) {
+                FirebaseMisPedidos(
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
+            } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "login"
+                }
+            }
+        }
+
+        // =================================
+        // ADMINISTRAR SOLICITUDES
+        // =================================
+
+        "adminSolicitudes" -> {
+
+            if (perfil?.rol == "admin") {
+
+                FirebaseListadoSolicitudes(
+                    esAdmin = true,
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
 
             } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "home"
+                }
+            }
+        }
 
-                when (pantalla) {
+        // =================================
+        // ADMINISTRAR COTIZACIONES
+        // =================================
 
-                    "cliente" -> ClientePanel(
-                        usuario = actual,
-                        onNueva = {
-                            pantalla = "nueva"
-                        },
-                        onMisSolicitudes = {
-                            pantalla = "mis"
-                        },
-                        onPedidos = {
-                            pantalla = "mispedidos"
-                        },
-                        onAdmin = {
-                            pantalla = "admin"
-                        },
-                        onSalir = {
-                            auth.cerrarSesion()
-                            usuario = null
-                            pantalla = "login"
-                        }
-                    )
+        "adminCotizaciones" -> {
 
-                    "nueva" -> NuevaSolicitudPanel(
-                        usuario = actual,
-                        onVolver = {
-                            pantalla = "cliente"
-                        }
-                    )
+            if (perfil?.rol == "admin") {
 
-                    "mis" -> MisSolicitudesPanel(
-                        usuario = actual,
-                        onVolver = {
-                            pantalla = "cliente"
-                        }
-                    )
+                FirebaseAdminCotizaciones(
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
 
-                    "mispedidos" -> MisPedidosPanel(
-                        usuario = actual,
-                        onVolver = {
-                            pantalla = "cliente"
-                        }
-                    )
+            } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "home"
+                }
+            }
+        }
 
-                    "admin" -> AdminPanel(
-                        onSolicitudes = {
-                            pantalla = "adminsol"
-                        },
-                        onPedidos = {
-                            pantalla = "adminped"
-                        },
-                        onReportes = {
-                            pantalla = "reportes"
-                        },
-                        onClientes = {
-                            pantalla = "clientes"
-                        },
-                        onVolver = {
-                            pantalla = "cliente"
-                        }
-                    )
+        // =================================
+        // ADMINISTRAR PEDIDOS
+        // =================================
 
-                    "adminsol" -> GestionCotizacionesPanel(
-                        onVolver = {
-                            pantalla = "admin"
-                        }
-                    )
+        "adminPedidos" -> {
 
-                    "adminped" -> GestionPedidosPanel(
-                        onVolver = {
-                            pantalla = "admin"
-                        }
-                    )
+            if (perfil?.rol == "admin") {
 
-                    "reportes" -> ReportesPanel(
-                        onVolver = {
-                            pantalla = "admin"
-                        }
-                    )
+                FirebaseAdminPedidos(
+                    onVolver = {
+                        pantalla = "home"
+                    }
+                )
 
-                    "clientes" -> ClientesPanel(
-                        onVolver = {
-                            pantalla = "admin"
-                        }
-                    )
+            } else {
+                LaunchedEffect(Unit) {
+                    pantalla = "home"
+                }
+            }
+        }
+
+        // =================================
+        // ERROR DE PERFIL
+        // =================================
+
+        "error" -> {
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+
+                Text(
+                    text = "Error al cargar la cuenta",
+                    style = MaterialTheme.typography.titleLarge
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        revisionSesion++
+                    }
+                ) {
+                    Text("Reintentar")
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                OutlinedButton(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        FirebaseRepository.salir()
+                        perfil = null
+                        error = ""
+                        pantalla = "login"
+                    }
+                ) {
+                    Text("Cerrar sesión")
                 }
             }
         }
